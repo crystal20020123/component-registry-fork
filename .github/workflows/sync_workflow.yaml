@@ -1,0 +1,71 @@
+# Workflow to keep a fork synchronized with the JSR registry repository
+name: 'JSR Upstream Sync'
+
+# Workflow trigger configuration
+on:
+  # Manual trigger via Actions tab
+  workflow_dispatch:
+    inputs:
+      # Test mode toggle for manual runs
+      sync_test_mode:
+        description: 'JSR Upstream Sync - Test Mode'
+        type: boolean
+        default: false
+  
+  # Optional: Automatic scheduled syncs
+  schedule:
+    - cron: '0 0 * * *'  # Runs at 00:00 UTC every day
+
+jobs:
+  sync_latest_from_upstream:
+    runs-on: ubuntu-latest
+    name: Sync latest commits from JSR registry
+
+    steps:
+    # Step 1: Repository checkout
+    # REQUIRED: Sets up repository code in the workflow environment
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      with:
+        # Uses dedicated sync branch to keep main branch clean
+        ref: upstream  # or whatever your default branch is
+        # Authentication requirement for private repositories
+        persist-credentials: false
+
+    # Step 2: JSR Registry synchronization
+    # REQUIRED: Performs the sync operation
+    - name: Sync upstream changes
+      id: sync
+      uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.1
+      with:
+        # Branch receiving updates
+        target_sync_branch: upstream
+        # Repository authentication token (auto-provided)
+        target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+        # JSR registry source branch
+        upstream_sync_branch: main
+        # JSR registry repository
+        upstream_sync_repo: jsr-io/jsr
+        # Authentication for private repository access
+        #upstream_repo_access_token: ${{ secrets.UPSTREAM_REPO_SECRET }}
+        # Ensure fast-forward only updates
+        upstream_pull_args: --ff-only
+        # Test mode configuration
+        test_mode: ${{ inputs.sync_test_mode }}
+
+    # Step 3: Status reporting
+    # Provides sync operation results
+
+    # Reports successful sync of new commits
+    - name: New commits found
+      if: steps.sync.outputs.has_new_commits == 'true'
+      run: echo "New commits were found to sync."
+    
+    # Reports when already up to date
+    - name: No new commits
+      if: steps.sync.outputs.has_new_commits == 'false'
+      run: echo "There were no new commits."
+      
+    # Displays final sync status
+    - name: Show value of 'has_new_commits'
+      run: echo ${{ steps.sync.outputs.has_new_commits }}
